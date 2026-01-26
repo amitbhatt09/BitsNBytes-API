@@ -69,7 +69,7 @@ namespace Bits_Bytes.API.Repositories.Implementation
 
             await dbContext.SaveChangesAsync();
 
-            return blogPost;
+            return existingBlogPost;
         }
     }
 }
