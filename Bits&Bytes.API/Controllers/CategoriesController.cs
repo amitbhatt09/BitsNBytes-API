@@ -18,7 +18,7 @@ namespace Bits_Bytes.API.Controllers
             this.categoryRepository = categoryRepository;
         }
         [HttpPost]
-        //[Authorize(Roles = "Writer")]
+        [Authorize(Roles = "Writer")]
         public async Task<IActionResult> CreateCategory([FromBody] CreateCategoryRequestDto request)
         {
             // Map DTO to Domain Model
@@ -94,7 +94,7 @@ namespace Bits_Bytes.API.Controllers
         // PUT: https://localhost:7226/api/categories/{id}
         [HttpPut]
         [Route("{id:Guid}")]
-        //[Authorize(Roles = "Writer")]
+        [Authorize(Roles = "Writer")]
         public async Task<IActionResult> EditCategory([FromRoute] Guid id, UpdateCategoryRequestDto request)
         {
             // Convert DTO to Domain Model
@@ -127,7 +127,7 @@ namespace Bits_Bytes.API.Controllers
         // DELETE: https://localhost:7226/api/categories/{id}
         [HttpDelete]
         [Route("{id:Guid}")]
-        //[Authorize(Roles = "Writer")]
+        [Authorize(Roles = "Writer")]
         public async Task<IActionResult> DeleteCategory([FromRoute] Guid id)
         {
             var category = await categoryRepository.DeleteAsync(id);
@@ -152,7 +152,7 @@ namespace Bits_Bytes.API.Controllers
         // GET: https://localhost:7226/api/categories/count
         [HttpGet]
         [Route("count")]
-        //[Authorize(Roles = "Writer")]
+        [Authorize(Roles = "Writer")]
         public async Task<IActionResult> GetCategoriesTotal()
         {
             var count = await categoryRepository.GetCount();
