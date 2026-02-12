@@ -129,7 +129,7 @@ app.UseHttpsRedirection();
 app.UseCors(options =>
 {
     options.AllowAnyHeader();
-    options.WithOrigins("https://localhost:4200");
+    options.WithOrigins("https://orange-water-06cf16100.6.azurestaticapps.net");
     options.AllowAnyMethod();
     options.AllowCredentials();
 });
