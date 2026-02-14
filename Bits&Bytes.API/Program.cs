@@ -10,16 +10,11 @@ using Microsoft.IdentityModel.Tokens;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-
-
 builder.Services.AddControllers();
 builder.Services.AddHttpContextAccessor();
 
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-
-
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
@@ -74,7 +69,6 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
 builder.Services.AddScoped<IBlogPostRepository, BlogPostRepository>();
 builder.Services.AddScoped<IImageRepository, ImageRepository>();
@@ -82,50 +76,89 @@ builder.Services.AddScoped<ITokenRepository, TokenRepository>();
 builder.Services.AddScoped<ICommentRepository, CommentRepository>();
 
 var app = builder.Build();
-using (var scope = app.Services.CreateScope())
+
+// Apply migrations and seed data
+try
 {
-    var services = scope.ServiceProvider;
-
-    var userManager = services.GetRequiredService<UserManager<IdentityUser>>();
-    var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
-
-    // Ensure roles exist
-    string[] roles = { "Reader", "Writer" };
-
-    foreach (var role in roles)
+    using (var scope = app.Services.CreateScope())
     {
-        if (!await roleManager.RoleExistsAsync(role))
+        var services = scope.ServiceProvider;
+        var logger = services.GetRequiredService<ILogger<Program>>();
+
+        try
         {
-            await roleManager.CreateAsync(new IdentityRole(role));
+            // Step 1: Apply migrations
+            logger.LogInformation("Applying database migrations...");
+
+            var authContext = services.GetRequiredService<AuthDbContext>();
+            authContext.Database.Migrate();
+
+            var appContext = services.GetRequiredService<ApplicationDbContext>();
+            appContext.Database.Migrate();
+
+            logger.LogInformation("Migrations applied successfully.");
+
+            // Step 2: Seed roles and admin user
+            logger.LogInformation("Seeding roles and admin user...");
+
+            var userManager = services.GetRequiredService<UserManager<IdentityUser>>();
+            var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
+
+            string[] roles = { "Reader", "Writer" };
+
+            foreach (var role in roles)
+            {
+                if (!await roleManager.RoleExistsAsync(role))
+                {
+                    await roleManager.CreateAsync(new IdentityRole(role));
+                    logger.LogInformation($"Created role: {role}");
+                }
+            }
+
+            var adminEmail = "admin@bitsnbytes.com";
+            var adminUser = await userManager.FindByEmailAsync(adminEmail);
+
+            if (adminUser == null)
+            {
+                adminUser = new IdentityUser
+                {
+                    UserName = adminEmail,
+                    Email = adminEmail,
+                    EmailConfirmed = true
+                };
+
+                var result = await userManager.CreateAsync(adminUser, "Admin@123");
+
+                if (result.Succeeded)
+                {
+                    await userManager.AddToRolesAsync(adminUser, roles);
+                    logger.LogInformation("Admin user created successfully.");
+                }
+                else
+                {
+                    logger.LogError($"Failed to create admin user: {string.Join(", ", result.Errors.Select(e => e.Description))}");
+                }
+            }
+
+            logger.LogInformation("Seeding completed successfully.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "An error occurred during database migration or seeding.");
         }
     }
-
-    // Ensure admin user exists
-    var adminEmail = "admin@bitsnbytes.com";
-    var adminUser = await userManager.FindByEmailAsync(adminEmail);
-
-    if (adminUser == null)
-    {
-        adminUser = new IdentityUser
-        {
-            UserName = adminEmail,
-            Email = adminEmail,
-            EmailConfirmed = true
-        };
-
-        await userManager.CreateAsync(adminUser, "Admin@123");
-        await userManager.AddToRolesAsync(adminUser, roles);
-    }
 }
-
-    // Configure the HTTP request pipeline.
-    if (app.Environment.IsDevelopment())
+catch (Exception ex)
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    Console.WriteLine($"CRITICAL STARTUP ERROR: {ex.Message}");
 }
+
+// Configure the HTTP request pipeline.
+app.UseSwagger();
+app.UseSwaggerUI();
 
 app.UseHttpsRedirection();
+
 app.UseCors(options =>
 {
     options.AllowAnyHeader();
@@ -136,13 +169,28 @@ app.UseCors(options =>
 
 app.UseAuthentication();
 app.UseAuthorization();
-app.UseStaticFiles(new StaticFileOptions
+
+// FIXED: Create Images folder if it doesn't exist, then serve static files
+var imagesPath = Path.Combine(Directory.GetCurrentDirectory(), "Images");
+try
 {
-    FileProvider = new PhysicalFileProvider(Path.Combine(Directory.GetCurrentDirectory(), "Images")),
-    RequestPath = "/Images"
-});
+    if (!Directory.Exists(imagesPath))
+    {
+        Directory.CreateDirectory(imagesPath);
+    }
+
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new PhysicalFileProvider(imagesPath),
+        RequestPath = "/Images"
+    });
+}
+catch (Exception ex)
+{
+    // Log but don't crash if Images folder can't be created
+    Console.WriteLine($"Warning: Could not set up Images folder: {ex.Message}");
+}
 
 app.MapControllers();
 
 app.Run();
-
